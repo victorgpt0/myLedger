@@ -22,7 +22,13 @@ data class Transaction(
     val balanceAfter: Double?,
     val feeAmount: Double?,
     val timestamp: Long,
-    val rawMessage: String
+    val rawMessage: String,
+    /**
+     * For a [TransactionKind.REVERSAL]: the id of the transaction it cancels. A reversal and the
+     * transaction it reverses are both left out of every income/expense/fee total (they net to
+     * nothing), but stay visible in transaction lists.
+     */
+    val reversesId: String? = null
 )
 
 enum class Direction { IN, OUT }
@@ -32,7 +38,16 @@ enum class Direction { IN, OUT }
  * breakdown (sending vs withdrawing vs paying cost very different amounts).
  * PAYBILL = "sent to X for account Y"; BUY_GOODS = till ("paid to X").
  */
-enum class TransactionKind { SEND_MONEY, PAYBILL, BUY_GOODS, WITHDRAWAL, AIRTIME, RECEIVED, OTHER }
+enum class TransactionKind {
+    SEND_MONEY, PAYBILL, BUY_GOODS, WITHDRAWAL, AIRTIME, RECEIVED,
+    /** Cash deposited at an agent ("Give Ksh… cash to <agent>"). */
+    DEPOSIT,
+    /** Dividend paid into M-PESA (e.g. Safaricom shareholder dividends). */
+    DIVIDEND,
+    /** Reversal of an earlier transaction; see [Transaction.reversesId]. */
+    REVERSAL,
+    OTHER
+}
 
 /**
  * A TRANSFER is money moving between the user's own accounts/wallets — it must never be

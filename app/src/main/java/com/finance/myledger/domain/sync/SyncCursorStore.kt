@@ -7,4 +7,8 @@ package com.finance.myledger.domain.sync
 interface SyncCursorStore {
     suspend fun getLastSyncedTimestamp(): Long
     suspend fun setLastSyncedTimestamp(timestamp: Long)
+
+    /** Parser version the inbox was last fully imported with (0 = never / before versioning). */
+    suspend fun getImportedParserVersion(): Int
+    suspend fun setImportedParserVersion(version: Int)
 }

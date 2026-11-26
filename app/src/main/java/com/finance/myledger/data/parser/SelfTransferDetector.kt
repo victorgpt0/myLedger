@@ -24,8 +24,12 @@ object SelfTransferDetector {
         "FULIZA"
     )
 
+    // Whole-word matches only: a plain substring test made payees like "KAMALI" or "MALINDI SHOP"
+    // count as transfers to the MALI wallet, silently removing them from income and spending.
+    private val PATTERNS = KNOWN_WALLETS.map { Regex("""(?<![A-Z0-9])${Regex.escape(it)}(?![A-Z0-9])""") }
+
     fun isSelfTransfer(counterparty: String): Boolean {
         val haystack = counterparty.uppercase()
-        return KNOWN_WALLETS.any { keyword -> haystack.contains(keyword) }
+        return PATTERNS.any { it.containsMatchIn(haystack) }
     }
 }

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.finance.myledger.domain.sync.SyncCursorStore
@@ -35,7 +36,15 @@ class SyncPreferences @Inject constructor(
         }
     }
 
+    override suspend fun getImportedParserVersion(): Int =
+        dataStore.data.map { prefs -> prefs[KEY_PARSER_VERSION] ?: 0 }.first()
+
+    override suspend fun setImportedParserVersion(version: Int) {
+        dataStore.edit { prefs -> prefs[KEY_PARSER_VERSION] = version }
+    }
+
     companion object {
         private val KEY_LAST_SYNCED = longPreferencesKey("last_synced_timestamp")
+        private val KEY_PARSER_VERSION = intPreferencesKey("imported_parser_version")
     }
 }

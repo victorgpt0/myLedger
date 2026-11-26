@@ -25,7 +25,8 @@ import com.finance.myledger.domain.model.TransactionType
         Index(value = ["timestamp"]),
         Index(value = ["category"]),
         Index(value = ["type"]),
-        Index(value = ["counterparty"])
+        Index(value = ["counterparty"]),
+        Index(value = ["reversesId"])
     ]
 )
 data class TransactionEntity(
@@ -41,7 +42,9 @@ data class TransactionEntity(
     val balanceAfter: Double?,
     val feeAmount: Double?,
     val timestamp: Long,
-    val rawMessage: String
+    val rawMessage: String,
+    /** Set on reversal rows: the id of the transaction they cancel. See [COUNTED]. */
+    val reversesId: String? = null
 )
 
 data class CategoryTotalRow(
@@ -76,8 +79,3 @@ data class DayOfWeekSpendRow(
     val total: Double
 )
 
-data class CounterpartySpendRow(
-    val counterparty: String,
-    val total: Double,
-    val transactionCount: Int
-)

@@ -51,13 +51,15 @@ Unmatched messages are silently dropped. Dedupe relies on the transaction `id` b
 ### Parsers and classification
 
 - **Adding a new SMS source**: implement `domain.sms.SmsParser` in `data/parser/`, then add a `@Binds @IntoSet` method in `RepositoryModule`. `ParserRegistry` receives the multibound `Set` and uses the first parser whose `matches()` returns true — no other changes needed.
-- `MpesaParser` is a list of (regex, extractor) pairs, one per message shape, with a sample SMS documented above each pattern. Add new shapes to that list. Fees come from "Transaction cost, Ksh X" when present.
+- `MpesaParser` is a list of (regex, extractor) pairs, one per message shape, with a real sample SMS documented above each pattern (send, receive, paybill/till, withdrawal, airtime, cash deposit, dividend, reversal). Add new shapes to that list **and bump `MpesaParser.version`**: `CheckParserUpgradeUseCase` then triggers one full re-import, because the incremental sync cursor has already passed messages older versions dropped (re-import is safe: inserts dedupe on id). Fees come from "Transaction cost, Ksh X" when present.
+- **Reversals**: a `TransactionKind.REVERSAL` row carries `reversesId` (the cancelled transaction's code). Every aggregate query must include the `COUNTED` condition from `TransactionDao.kt` (excludes reversal rows and the rows they reverse); Kotlin-side aggregation must use `observeCountedInRange`. Lists and the balance use all rows.
+- Counterparty strings are stored as written; group/display them through `domain/classifier/CounterpartyName` (strips masked/full phone numbers, "for account …", leading years, extra spaces) — never `GROUP BY counterparty` in SQL.
 - `SelfTransferDetector` reclassifies known wallet counterparties (M-Shwari, KCB M-PESA, Fuliza, Hustler Fund, etc.) as `TransactionType.TRANSFER`.
 - `CategoryClassifier` (domain) is a keyword heuristic mapping counterparty/body to `Category`.
 
 ### Persistence and analytics
 
-- `AppDatabase` (version 3, `exportSchema = false`). Changing `TransactionEntity` means bumping the version **and** adding a migration in `data/local/Migrations.kt` (register it in `DatabaseModule`); `fallbackToDestructiveMigration()` only covers versions without one. `MigrationsTest` builds a real old-version DB and opens it with Room, which validates the schema — extend it for new migrations. Migrations that backfill from `rawMessage` must mirror the parser's pattern logic.
+- `AppDatabase` (version 4, `exportSchema = false`). Changing `TransactionEntity` means bumping the version **and** adding a migration in `data/local/Migrations.kt` (append it to `Migrations.ALL`, which `DatabaseModule` registers); `fallbackToDestructiveMigration()` only covers versions without one. `MigrationsTest` builds a real old-version DB and opens it with Room, which validates the schema — extend it for new migrations. Migrations that backfill from `rawMessage` must mirror the parser's pattern logic.
 - Enums are stored as strings via `Converters`; DAO SQL compares against enum names (e.g. `type != 'TRANSFER'`).
 - **Income/expense aggregates must exclude `TRANSFER`** so self-wallet movements aren't counted as spend/income; transfers have their own totals.
 - `TransactionKind` (send / paybill / till / withdrawal / airtime / received) is set by the parser per message shape and drives the fee breakdown; it's separate from `TransactionType` (income / expense / transfer).

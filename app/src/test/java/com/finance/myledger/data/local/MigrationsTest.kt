@@ -36,7 +36,7 @@ class MigrationsTest {
     }
 
     @Test
-    fun migrate2To3_keepsRowsAndBackfillsKind() = runTest {
+    fun migrate2ToLatest_keepsRowsAndBackfillsKind() = runTest {
         val path = context.getDatabasePath(dbName).apply { parentFile?.mkdirs() }
         SQLiteDatabase.openOrCreateDatabase(path, null).use { v2 ->
             v2.execSQL(V2_SCHEMA)
@@ -59,12 +59,13 @@ class MigrationsTest {
         }
 
         val db = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            .addMigrations(Migrations.MIGRATION_2_3)
+            .addMigrations(*Migrations.ALL)
             .allowMainThreadQueries()
             .build()
         try {
-            val kinds = TransactionRepositoryImpl(db.transactionDao()).observeAll().first()
-                .associate { it.id to it.kind }
+            val rows = TransactionRepositoryImpl(db.transactionDao()).observeAll().first()
+            assertThat(rows.map { it.reversesId }.toSet()).containsExactly(null) // 3 → 4 column added, empty
+            val kinds = rows.associate { it.id to it.kind }
             assertThat(kinds).containsExactly(
                 "PAID000001", TransactionKind.BUY_GOODS,
                 "BILL000001", TransactionKind.PAYBILL,

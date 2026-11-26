@@ -106,5 +106,8 @@ private fun kindLabel(kind: TransactionKind): String = when (kind) {
     TransactionKind.WITHDRAWAL -> "Agent withdrawals"
     TransactionKind.AIRTIME -> "Airtime purchases"
     TransactionKind.RECEIVED -> "Receipts"
+    TransactionKind.DEPOSIT -> "Cash deposits"
+    TransactionKind.DIVIDEND -> "Dividends"
+    TransactionKind.REVERSAL -> "Reversals"
     TransactionKind.OTHER -> "Other transactions"
 }

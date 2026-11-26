@@ -1,5 +1,6 @@
 package com.finance.myledger.domain.usecase
 
+import com.finance.myledger.domain.classifier.CounterpartyName
 import com.finance.myledger.domain.model.DateRange
 import com.finance.myledger.domain.model.RecurringExpense
 import com.finance.myledger.domain.model.Transaction
@@ -30,7 +31,7 @@ class DetectRecurringExpensesUseCase @Inject constructor(
         amountTolerance: Double = 0.10
     ): Flow<List<RecurringExpense>> {
         val bounds = range.toBounds()
-        return repository.observeInRange(bounds).map { transactions ->
+        return repository.observeCountedInRange(bounds).map { transactions ->
             detect(transactions, lookbackMonths, minMonthsSeen, amountTolerance)
         }
     }
@@ -46,7 +47,7 @@ class DetectRecurringExpensesUseCase @Inject constructor(
         if (expenses.isEmpty()) return emptyList()
 
         val monthKeys = lastNMonthKeys(lookbackMonths)
-        val byCounterparty = expenses.groupBy { it.counterparty.trim().uppercase() }
+        val byCounterparty = expenses.groupBy { CounterpartyName.key(it.counterparty) }
 
         return byCounterparty.mapNotNull { (_, txs) ->
             val byMonth = txs.groupBy { yearMonthKey(it.timestamp) }
@@ -62,7 +63,7 @@ class DetectRecurringExpensesUseCase @Inject constructor(
             if (similar < minMonthsSeen) return@mapNotNull null
 
             RecurringExpense(
-                counterparty = txs.first().counterparty,
+                counterparty = CounterpartyName.bestDisplay(txs.map { it.counterparty }),
                 averageAmount = avg,
                 monthsSeen = monthsPresent,
                 lastSeenMillis = txs.maxOf { it.timestamp }

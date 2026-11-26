@@ -5,6 +5,7 @@ import com.finance.myledger.data.local.TransactionEntity
 import com.finance.myledger.data.mapper.toDomain
 import com.finance.myledger.data.mapper.toEntity
 import com.finance.myledger.domain.balance.BalanceChainResolver
+import com.finance.myledger.domain.classifier.CounterpartyName
 import com.finance.myledger.domain.model.Category
 import com.finance.myledger.domain.model.CategorySpend
 import com.finance.myledger.domain.model.CounterpartySpend
@@ -15,6 +16,7 @@ import com.finance.myledger.domain.model.MonthlyTotal
 import com.finance.myledger.domain.model.PeriodTotals
 import com.finance.myledger.domain.model.Transaction
 import com.finance.myledger.domain.model.TransactionKind
+import com.finance.myledger.domain.model.TransactionType
 import com.finance.myledger.domain.repository.TransactionRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -114,15 +116,24 @@ class TransactionRepositoryImpl @Inject constructor(
         bounds: DateRangeBounds,
         limit: Int
     ): Flow<List<CounterpartySpend>> =
-        dao.observeTopCounterparties(bounds.startMillis, bounds.endMillis, limit).map { rows ->
-            rows.map { row ->
-                CounterpartySpend(
-                    counterparty = row.counterparty,
-                    total = row.total,
-                    transactionCount = row.transactionCount
-                )
-            }
+        // Grouped in Kotlin, not SQL, so differently written names for the same party
+        // ("Evans  Maingi 0759***207" / "EVANS MAINGI") merge via CounterpartyName.
+        dao.observeCountedInRange(bounds.startMillis, bounds.endMillis).map { rows ->
+            rows.filter { it.type == TransactionType.EXPENSE }
+                .groupBy { CounterpartyName.key(it.counterparty) }
+                .map { (_, group) ->
+                    CounterpartySpend(
+                        counterparty = CounterpartyName.bestDisplay(group.map { it.counterparty }),
+                        total = group.sumOf { it.amount },
+                        transactionCount = group.size
+                    )
+                }
+                .sortedByDescending { it.total }
+                .take(limit)
         }
+
+    override fun observeCountedInRange(bounds: DateRangeBounds): Flow<List<Transaction>> =
+        dao.observeCountedInRange(bounds.startMillis, bounds.endMillis).map { it.toChainOrderedDomain() }
 
     /** Same-minute ties come back in arbitrary order from SQL; fix them via the balance chain. */
     private fun List<TransactionEntity>.toChainOrderedDomain(): List<Transaction> =

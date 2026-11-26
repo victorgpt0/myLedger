@@ -14,6 +14,14 @@ import kotlinx.coroutines.flow.Flow
  * Date grouping uses `'localtime'` so buckets follow the device's day/month, not UTC
  * (otherwise 00:00–02:59 EAT lands on the previous day).
  */
+/**
+ * SQL condition for rows that count towards income/expense/fee totals: excludes reversal rows and
+ * the transactions they reversed, which together net to nothing. Every aggregate query must
+ * include it; transaction lists and the balance deliberately don't (they show what happened).
+ */
+const val COUNTED =
+    "kind != 'REVERSAL' AND id NOT IN (SELECT reversesId FROM transactions WHERE reversesId IS NOT NULL)"
+
 @Dao
 interface TransactionDao {
 
@@ -42,6 +50,7 @@ interface TransactionDao {
         WHERE type = 'EXPENSE'
           AND timestamp >= :startMillis
           AND timestamp < :endMillis
+          AND $COUNTED
         GROUP BY category
         ORDER BY total DESC
         """
@@ -69,6 +78,7 @@ interface TransactionDao {
         WHERE type = 'EXPENSE'
           AND timestamp >= :startMillis
           AND timestamp < :endMillis
+          AND $COUNTED
         """
     )
     fun observeExpenseTotalInRange(startMillis: Long, endMillis: Long): Flow<Double>
@@ -79,6 +89,7 @@ interface TransactionDao {
         WHERE type = 'INCOME'
           AND timestamp >= :startMillis
           AND timestamp < :endMillis
+          AND $COUNTED
         """
     )
     fun observeIncomeTotalInRange(startMillis: Long, endMillis: Long): Flow<Double>
@@ -89,6 +100,7 @@ interface TransactionDao {
         WHERE feeAmount IS NOT NULL
           AND timestamp >= :startMillis
           AND timestamp < :endMillis
+          AND $COUNTED
         """
     )
     fun observeTotalFeesInRange(startMillis: Long, endMillis: Long): Flow<Double>
@@ -109,6 +121,7 @@ interface TransactionDao {
         FROM transactions
         WHERE timestamp >= :startMillis
           AND timestamp < :endMillis
+          AND $COUNTED
         """
     )
     fun observePeriodTotals(startMillis: Long, endMillis: Long): Flow<PeriodTotalsRow>
@@ -122,6 +135,7 @@ interface TransactionDao {
         FROM transactions
         WHERE timestamp >= :startMillis
           AND timestamp < :endMillis
+          AND $COUNTED
         GROUP BY kind
         HAVING fees > 0
         ORDER BY fees DESC
@@ -144,6 +158,7 @@ interface TransactionDao {
         WHERE type != 'TRANSFER'
           AND timestamp >= :startMillis
           AND timestamp < :endMillis
+          AND $COUNTED
         GROUP BY yearMonth
         ORDER BY yearMonth ASC
         """
@@ -159,29 +174,25 @@ interface TransactionDao {
         WHERE type = 'EXPENSE'
           AND timestamp >= :startMillis
           AND timestamp < :endMillis
+          AND $COUNTED
         GROUP BY dayOfWeek
         ORDER BY dayOfWeek ASC
         """
     )
     fun observeDayOfWeekSpend(startMillis: Long, endMillis: Long): Flow<List<DayOfWeekSpendRow>>
 
+    /**
+     * Rows that count towards totals ([COUNTED]) in a range — for aggregations done in Kotlin
+     * (counterparty grouping by normalised name, recurring detection).
+     */
     @Query(
         """
-        SELECT counterparty,
-               SUM(amount) AS total,
-               COUNT(*) AS transactionCount
-        FROM transactions
-        WHERE type = 'EXPENSE'
-          AND timestamp >= :startMillis
+        SELECT * FROM transactions
+        WHERE timestamp >= :startMillis
           AND timestamp < :endMillis
-        GROUP BY counterparty
-        ORDER BY total DESC
-        LIMIT :limit
+          AND $COUNTED
+        ORDER BY timestamp DESC, rowid DESC
         """
     )
-    fun observeTopCounterparties(
-        startMillis: Long,
-        endMillis: Long,
-        limit: Int
-    ): Flow<List<CounterpartySpendRow>>
+    fun observeCountedInRange(startMillis: Long, endMillis: Long): Flow<List<TransactionEntity>>
 }

@@ -20,6 +20,9 @@ class ParserRegistry @Inject constructor(
 
     private val normalizedSenders = senderIds.map(::normalizeSender).toSet()
 
+    /** Changes whenever any parser's [SmsParser.version] does. */
+    val version: Int = parsers.sumOf { it.version }
+
     fun isKnownSender(sender: String): Boolean = normalizeSender(sender) in normalizedSenders
 
     fun parse(sender: String, body: String, timestamp: Long): Transaction? {

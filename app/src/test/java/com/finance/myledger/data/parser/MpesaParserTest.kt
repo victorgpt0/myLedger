@@ -194,4 +194,92 @@ class MpesaParserTest {
         assertThat(kindOf("AIR55TIME6 Confirmed. You bought Ksh100.00 of airtime on 1/7/26 at 9:00 AM. New M-PESA balance is Ksh400.00."))
             .isEqualTo(TransactionKind.AIRTIME)
     }
+
+    // --- Real samples (inflows, bank transfers, reversals) ---------------------------------------
+
+    @Test
+    fun parse_cashDeposit_isIncomeWithAgentAndBodyTime() {
+        val body = "UJPA1BPMQV Confirmed. On 25/10/26 at 6:27 PM Give Ksh1,500.00 cash to Minutes Comm Destiny shop " +
+            "along chwele kimi New M-PESA balance is Ksh1,616.20. You can now access M-PESA via *334#"
+        val tx = parser.parse("MPESA", body, smsTimestamp)!!
+        assertThat(tx.id).isEqualTo("UJPA1BPMQV")
+        assertThat(tx.amount).isEqualTo(1_500.0)
+        assertThat(tx.direction).isEqualTo(Direction.IN)
+        assertThat(tx.type).isEqualTo(TransactionType.INCOME)
+        assertThat(tx.kind).isEqualTo(TransactionKind.DEPOSIT)
+        assertThat(tx.counterparty).isEqualTo("Minutes Comm Destiny shop along chwele kimi")
+        assertThat(tx.balanceAfter).isEqualTo(1_616.2)
+        assertThat(tx.timestamp).isNotEqualTo(smsTimestamp)
+    }
+
+    @Test
+    fun parse_cashDeposit_companyAgent() {
+        val body = "UHPA1497J8 Confirmed. On 25/8/26 at 3:59 PM Give Ksh2,000.00 cash to MOSRACH LTD EBENEZER SHOP " +
+            "SANKALE RD MADARAKA NRB New M-PESA balance is Ksh2,139.00. You can now access M-PESA via *334#"
+        val tx = parser.parse("MPESA", body, smsTimestamp)!!
+        assertThat(tx.amount).isEqualTo(2_000.0)
+        assertThat(tx.kind).isEqualTo(TransactionKind.DEPOSIT)
+        assertThat(tx.balanceAfter).isEqualTo(2_139.0)
+    }
+
+    @Test
+    fun parse_dividend_usesAccountBalanceLineAndDividendName() {
+        val body = "UI2A155WAF Confirmed.  You have received a dividend payment from 2026 Safaricom Final Dividend " +
+            "from Stanbic Bank of Ksh38.20 on 2/9/26  at 12:14 PM. Your new Account balance is Ksh1,334.20."
+        val tx = parser.parse("MPESA", body, smsTimestamp)!!
+        assertThat(tx.id).isEqualTo("UI2A155WAF")
+        assertThat(tx.amount).isEqualTo(38.2)
+        assertThat(tx.type).isEqualTo(TransactionType.INCOME)
+        assertThat(tx.kind).isEqualTo(TransactionKind.DIVIDEND)
+        assertThat(tx.counterparty).isEqualTo("2026 Safaricom Final Dividend")
+        assertThat(tx.balanceAfter).isEqualTo(1_334.2)
+        assertThat(tx.timestamp).isNotEqualTo(smsTimestamp)
+    }
+
+    @Test
+    fun parse_bankToMpesa_isReceived() {
+        val body = "UGSA110IFW Confirmed. You have received Ksh142.00 from STANBIC BANK KENYA LTD on 28/7/26 at 4:20 PM. " +
+            "New M-PESA balance is Ksh468.00. Separate personal and business funds through Pochi la Biashara on *334#."
+        val tx = parser.parse("MPESA", body, smsTimestamp)!!
+        assertThat(tx.amount).isEqualTo(142.0)
+        assertThat(tx.kind).isEqualTo(TransactionKind.RECEIVED)
+        assertThat(tx.counterparty).isEqualTo("STANBIC BANK KENYA LTD")
+        assertThat(tx.balanceAfter).isEqualTo(468.0)
+    }
+
+    @Test
+    fun parse_mpesaToBank_isPaybill() {
+        val body = "UEFA14H4EY Confirmed. Ksh40.00 sent to Stanbic Bank for account 106168 on 15/5/26 at 11:52 AM " +
+            "New M-PESA balance is Ksh2,102.00. Transaction cost, Ksh0.00.Amount you can transact within the day is " +
+            "499,860.00. Save frequent paybills for quick payment on M-PESA app https://bit.ly/mpesalnk"
+        val tx = parser.parse("MPESA", body, smsTimestamp)!!
+        assertThat(tx.amount).isEqualTo(40.0)
+        assertThat(tx.kind).isEqualTo(TransactionKind.PAYBILL)
+        assertThat(tx.balanceAfter).isEqualTo(2_102.0)
+        assertThat(tx.feeAmount).isEqualTo(0.0)
+    }
+
+    @Test
+    fun parse_reversalDebited_linksOriginalAndIsOutbound() {
+        val body = "UAL2IH85NG  confirmed. Reversal of transaction UAL2I4I7W9 has been successfully reversed  on 21/1/26  " +
+            "at 5:02 PM and Ksh50.00 is debited from your M-PESA account. New M-PESA account balance is Ksh1,052.16."
+        val tx = parser.parse("MPESA", body, smsTimestamp)!!
+        assertThat(tx.id).isEqualTo("UAL2IH85NG")
+        assertThat(tx.kind).isEqualTo(TransactionKind.REVERSAL)
+        assertThat(tx.reversesId).isEqualTo("UAL2I4I7W9")
+        assertThat(tx.amount).isEqualTo(50.0)
+        assertThat(tx.direction).isEqualTo(Direction.OUT)
+        assertThat(tx.balanceAfter).isEqualTo(1_052.16)
+    }
+
+    @Test
+    fun parse_reversalCredited_isInbound() {
+        val body = "UCJA1JM9X5 confirmed. Reversal of transaction UCIA19UNYW has been successfully reversed  on 19/3/26  " +
+            "at 8:05 AM and Ksh544.00 is credited to your M-PESA account. New M-PESA account balance is Ksh3,057.75."
+        val tx = parser.parse("MPESA", body, smsTimestamp)!!
+        assertThat(tx.reversesId).isEqualTo("UCIA19UNYW")
+        assertThat(tx.amount).isEqualTo(544.0)
+        assertThat(tx.direction).isEqualTo(Direction.IN)
+        assertThat(tx.balanceAfter).isEqualTo(3_057.75)
+    }
 }

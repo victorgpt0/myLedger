@@ -22,7 +22,8 @@ fun TransactionEntity.toDomain(): Transaction = Transaction(
     balanceAfter = balanceAfter,
     feeAmount = feeAmount,
     timestamp = timestamp,
-    rawMessage = rawMessage
+    rawMessage = rawMessage,
+    reversesId = reversesId
 )
 
 fun Transaction.toEntity(): TransactionEntity = TransactionEntity(
@@ -37,5 +38,6 @@ fun Transaction.toEntity(): TransactionEntity = TransactionEntity(
     balanceAfter = balanceAfter,
     feeAmount = feeAmount,
     timestamp = timestamp,
-    rawMessage = rawMessage
+    rawMessage = rawMessage,
+    reversesId = reversesId
 )

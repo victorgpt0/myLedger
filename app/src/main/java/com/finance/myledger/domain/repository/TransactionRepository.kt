@@ -24,6 +24,12 @@ interface TransactionRepository {
 
     fun observeInRange(bounds: DateRangeBounds): Flow<List<Transaction>>
 
+    /**
+     * Like [observeInRange] but only rows that count towards totals: reversals and the
+     * transactions they cancelled are left out. Use for any Kotlin-side aggregation.
+     */
+    fun observeCountedInRange(bounds: DateRangeBounds): Flow<List<Transaction>>
+
     fun observeLatestBalance(): Flow<Double?>
 
     fun observeExpenseTotalInRange(bounds: DateRangeBounds): Flow<Double>

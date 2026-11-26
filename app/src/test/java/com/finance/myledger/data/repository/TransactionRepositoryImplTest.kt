@@ -178,6 +178,43 @@ class TransactionRepositoryImplTest {
         assertThat(repository.observeFirstTimestamp().first()).isEqualTo(2_000L)
     }
 
+    @Test
+    fun reversals_andTheirOriginals_areLeftOutOfTotals() = runTest {
+        val bounds = DateRangeBounds(0L, Long.MAX_VALUE)
+        repository.insert(sampleTx(id = "PAY0000001", amount = 544.0, fee = 7.0))                       // refunded later
+        repository.insert(sampleTx(id = "PAY0000002", amount = 100.0))                                  // stands
+        repository.insert(sampleTx(id = "REV0000001", amount = 544.0, type = TransactionType.INCOME,
+            direction = Direction.IN, kind = TransactionKind.REVERSAL, reversesId = "PAY0000001"))
+        repository.insert(sampleTx(id = "REV0000002", amount = 50.0, kind = TransactionKind.REVERSAL,
+            reversesId = "OLDER00001"))                                                                  // original not stored
+
+        val totals = repository.observePeriodTotals(bounds).first()
+        assertThat(totals.expense).isEqualTo(100.0)
+        assertThat(totals.income).isEqualTo(0.0)
+        assertThat(totals.fees).isEqualTo(0.0)
+        assertThat(totals.expenseCount).isEqualTo(1)
+        assertThat(repository.observeExpenseTotalInRange(bounds).first()).isEqualTo(100.0)
+        assertThat(repository.observeCountedInRange(bounds).first().map { it.id }).containsExactly("PAY0000002")
+        // Lists still show everything.
+        assertThat(repository.observeAll().first()).hasSize(4)
+    }
+
+    @Test
+    fun observeTopCounterparties_mergesDifferentlyWrittenNames() = runTest {
+        val bounds = DateRangeBounds(0L, Long.MAX_VALUE)
+        repository.insert(sampleTx(id = "P000000001", amount = 100.0, counterparty = "Evans  Maingi 0759***207"))
+        repository.insert(sampleTx(id = "P000000002", amount = 50.0, counterparty = "EVANS MAINGI 0712345678"))
+        repository.insert(sampleTx(id = "P000000003", amount = 40.0, counterparty = "Stanbic Bank for account 106168"))
+        repository.insert(sampleTx(id = "P000000004", amount = 60.0, counterparty = "Stanbic Bank for account 2"))
+
+        val top = repository.observeTopCounterparties(bounds, 10).first()
+
+        assertThat(top.map { Triple(it.counterparty, it.total, it.transactionCount) }).containsExactly(
+            Triple("Evans Maingi", 150.0, 2),
+            Triple("Stanbic Bank", 100.0, 2)
+        ).inOrder()
+    }
+
     private fun sampleTx(
         id: String,
         amount: Double,
@@ -187,7 +224,8 @@ class TransactionRepositoryImplTest {
         type: TransactionType = TransactionType.EXPENSE,
         fee: Double? = null,
         direction: Direction = if (type == TransactionType.INCOME) Direction.IN else Direction.OUT,
-        kind: TransactionKind = TransactionKind.OTHER
+        kind: TransactionKind = TransactionKind.OTHER,
+        reversesId: String? = null
     ) = Transaction(
         id = id,
         source = "MPESA",
@@ -200,6 +238,7 @@ class TransactionRepositoryImplTest {
         balanceAfter = balance,
         feeAmount = fee,
         timestamp = timestamp,
-        rawMessage = "raw"
+        rawMessage = "raw",
+        reversesId = reversesId
     )
 }

@@ -18,6 +18,13 @@ interface SmsParser {
      */
     val senderIds: Set<String>
 
+    /**
+     * Bump when patterns are added or fixed. If the combined version is newer than the one the
+     * inbox was last fully imported with, the app re-imports once so previously dropped messages
+     * are picked up (see [com.finance.myledger.domain.usecase.CheckParserUpgradeUseCase]).
+     */
+    val version: Int
+
     fun matches(sender: String, body: String): Boolean
     fun parse(sender: String, body: String, timestamp: Long): Transaction?
 }

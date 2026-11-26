@@ -27,6 +27,11 @@ class MpesaParser @Inject constructor() : SmsParser {
 
     override val sourceName: String = "MPESA"
 
+    // Bump whenever a pattern is added or fixed: the app re-imports the inbox once so messages
+    // dropped by older versions get picked up (the incremental sync cursor has already passed them).
+    // 2: cash deposits, dividends, reversals.
+    override val version: Int = 2
+
     override val senderIds: Set<String> = setOf("MPESA", "M-PESA")
 
     private val normalizedSenders = senderIds.map(::normalizeSender).toSet()
@@ -56,7 +61,8 @@ class MpesaParser @Inject constructor() : SmsParser {
         val kind: TransactionKind,
         val counterparty: String,
         val balanceAfter: Double?,
-        val bodyTimestamp: Long?
+        val bodyTimestamp: Long?,
+        val reversesId: String? = null
     )
 
     private val patterns: List<Pair<Pattern, (java.util.regex.Matcher, String, Long) -> Transaction?>> =
@@ -167,6 +173,78 @@ class MpesaParser @Inject constructor() : SmsParser {
                     body,
                     smsTs
                 )
+            },
+
+            // Cash deposit at an agent (date comes first in this shape):
+            // "UJPA1BPMQV Confirmed. On 25/10/26 at 6:27 PM Give Ksh1,500.00 cash to Minutes Comm Destiny shop
+            //  along chwele kimi New M-PESA balance is Ksh1,616.20. You can now access M-PESA via *334#"
+            Pattern.compile(
+                """(?i)([A-Z0-9]{10})\s+Confirmed\.\s*On\s+(\d{1,2}/\d{1,2}/\d{2,4})\s+at\s+\d{1,2}:\d{2}\s*[AP]M\s+Give\s+Ksh([\d,]+\.?\d*)\s+cash to\s+(.+?)\s+New M-PESA balance is Ksh([\d,]+\.?\d*)""",
+                Pattern.DOTALL
+            ) to { m, body, smsTs ->
+                toTransaction(
+                    Extracted(
+                        code = m.group(1),
+                        amount = parseAmount(m.group(3)),
+                        direction = Direction.IN,
+                        kind = TransactionKind.DEPOSIT,
+                        counterparty = m.group(4).trim(),
+                        balanceAfter = parseAmount(m.group(5)),
+                        bodyTimestamp = parseMpesaDate(m.group(2), body, smsTs)
+                    ),
+                    body,
+                    smsTs
+                )
+            },
+
+            // Dividend (note "Your new Account balance", not "New M-PESA balance"):
+            // "UI2A155WAF Confirmed.  You have received a dividend payment from 2026 Safaricom Final Dividend from
+            //  Stanbic Bank of Ksh38.20 on 2/9/26  at 12:14 PM. Your new Account balance is Ksh1,334.20."
+            Pattern.compile(
+                """(?i)([A-Z0-9]{10})\s+Confirmed\.\s*You have received a dividend payment from\s+(.+?)\s+of Ksh([\d,]+\.?\d*)\s+on\s+(\d{1,2}/\d{1,2}/\d{2,4}).*?(?:New M-PESA|Your new)\s+(?:account\s+)?balance is Ksh([\d,]+\.?\d*)""",
+                Pattern.DOTALL
+            ) to { m, body, smsTs ->
+                toTransaction(
+                    Extracted(
+                        code = m.group(1),
+                        amount = parseAmount(m.group(3)),
+                        direction = Direction.IN,
+                        kind = TransactionKind.DIVIDEND,
+                        // "2026 Safaricom Final Dividend from Stanbic Bank" → the dividend, not the paying bank.
+                        counterparty = m.group(2).trim().substringBefore(" from ").ifBlank { m.group(2).trim() },
+                        balanceAfter = parseAmount(m.group(5)),
+                        bodyTimestamp = parseMpesaDate(m.group(4), body, smsTs)
+                    ),
+                    body,
+                    smsTs
+                )
+            },
+
+            // Reversal, either direction. "debited" = money you'd received was taken back;
+            // "credited" = a payment you made was refunded.
+            // "UAL2IH85NG  confirmed. Reversal of transaction UAL2I4I7W9 has been successfully reversed  on 21/1/26
+            //  at 5:02 PM and Ksh50.00 is debited from your M-PESA account. New M-PESA account balance is Ksh1,052.16."
+            // "UCJA1JM9X5 confirmed. Reversal of transaction UCIA19UNYW has been successfully reversed  on 19/3/26
+            //  at 8:05 AM and Ksh544.00 is credited to your M-PESA account. New M-PESA account balance is Ksh3,057.75."
+            Pattern.compile(
+                """(?i)([A-Z0-9]{10})\s+confirmed\.\s*Reversal of transaction\s+([A-Z0-9]{10})\s+has been successfully reversed\s+on\s+(\d{1,2}/\d{1,2}/\d{2,4}).*?Ksh([\d,]+\.?\d*)\s+is\s+(debited|credited)\b.*?New M-PESA\s+(?:account\s+)?balance is Ksh([\d,]+\.?\d*)""",
+                Pattern.DOTALL
+            ) to { m, body, smsTs ->
+                val original = m.group(2).uppercase(Locale.US)
+                toTransaction(
+                    Extracted(
+                        code = m.group(1),
+                        amount = parseAmount(m.group(4)),
+                        direction = if (m.group(5).equals("credited", ignoreCase = true)) Direction.IN else Direction.OUT,
+                        kind = TransactionKind.REVERSAL,
+                        counterparty = "Reversal of $original",
+                        balanceAfter = parseAmount(m.group(6)),
+                        bodyTimestamp = parseMpesaDate(m.group(3), body, smsTs),
+                        reversesId = original
+                    ),
+                    body,
+                    smsTs
+                )
             }
         )
 
@@ -193,7 +271,8 @@ class MpesaParser @Inject constructor() : SmsParser {
             balanceAfter = extracted.balanceAfter,
             feeAmount = parseFee(body),
             timestamp = extracted.bodyTimestamp ?: smsTimestamp,
-            rawMessage = body
+            rawMessage = body,
+            reversesId = extracted.reversesId
         )
     }
 

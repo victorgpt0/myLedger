@@ -9,6 +9,7 @@ import androidx.work.WorkManager
 import com.finance.myledger.data.sms.SmsBackfillWorker
 import com.finance.myledger.domain.settings.PrivacySettings
 import com.finance.myledger.domain.sms.SmsPermissionChecker
+import com.finance.myledger.domain.usecase.CheckParserUpgradeUseCase
 import com.finance.myledger.domain.usecase.ObserveDashboardSummaryUseCase
 import com.finance.myledger.domain.usecase.SyncTransactionsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,7 +31,8 @@ class DashboardViewModel @Inject constructor(
     private val syncTransactions: SyncTransactionsUseCase,
     private val permissionChecker: SmsPermissionChecker,
     private val workManager: WorkManager,
-    private val privacySettings: PrivacySettings
+    private val privacySettings: PrivacySettings,
+    private val checkParserUpgrade: CheckParserUpgradeUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DashboardUiState>(DashboardUiState.Loading)
@@ -96,6 +98,13 @@ class DashboardViewModel @Inject constructor(
             return
         }
         observeJob?.cancel()
+        viewModelScope.launch {
+            // The app learned new message types since the last full import: re-import once.
+            if (!autoImportRequested && checkParserUpgrade()) {
+                autoImportRequested = true
+                startBackfill()
+            }
+        }
         observeJob = viewModelScope.launch {
             combine(
                 observeDashboardSummary(),

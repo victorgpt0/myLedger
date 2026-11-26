@@ -24,7 +24,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "myledger.db")
-            .addMigrations(Migrations.MIGRATION_2_3)
+            .addMigrations(*Migrations.ALL)
             .fallbackToDestructiveMigration()
             .build()
 

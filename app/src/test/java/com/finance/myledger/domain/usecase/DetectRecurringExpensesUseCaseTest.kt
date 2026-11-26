@@ -81,6 +81,7 @@ class DetectRecurringExpensesUseCaseTest {
         override fun observeAll() = emptyFlow<List<Transaction>>()
         override fun observeRecent(limit: Int) = emptyFlow<List<Transaction>>()
         override fun observeInRange(bounds: DateRangeBounds) = emptyFlow<List<Transaction>>()
+        override fun observeCountedInRange(bounds: DateRangeBounds) = emptyFlow<List<Transaction>>()
         override fun observeLatestBalance() = emptyFlow<Double?>()
         override fun observeExpenseTotalInRange(bounds: DateRangeBounds) = emptyFlow<Double>()
         override fun observeIncomeTotalInRange(bounds: DateRangeBounds) = emptyFlow<Double>()
