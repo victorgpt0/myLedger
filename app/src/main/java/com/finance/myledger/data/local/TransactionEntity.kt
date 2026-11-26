@@ -1,10 +1,12 @@
 package com.finance.myledger.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.finance.myledger.domain.model.Category
 import com.finance.myledger.domain.model.Direction
+import com.finance.myledger.domain.model.TransactionKind
 import com.finance.myledger.domain.model.TransactionType
 
 /**
@@ -32,6 +34,8 @@ data class TransactionEntity(
     val amount: Double,
     val direction: Direction,
     val type: TransactionType,
+    // Default must match MIGRATION_2_3 so Room's schema validation passes for migrated DBs.
+    @ColumnInfo(defaultValue = "OTHER") val kind: TransactionKind,
     val counterparty: String,
     val category: Category,
     val balanceAfter: Double?,
@@ -50,6 +54,21 @@ data class MonthlyTotalRow(
     val income: Double,
     val expense: Double,
     val fees: Double
+)
+
+data class PeriodTotalsRow(
+    val income: Double,
+    val expense: Double,
+    val fees: Double,
+    val transferOut: Double,
+    val transferIn: Double,
+    val expenseCount: Int
+)
+
+data class FeeByKindRow(
+    val kind: String,
+    val fees: Double,
+    val transactionCount: Int
 )
 
 data class DayOfWeekSpendRow(

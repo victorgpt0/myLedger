@@ -16,6 +16,7 @@ data class Transaction(
     val amount: Double,
     val direction: Direction,
     val type: TransactionType,
+    val kind: TransactionKind = TransactionKind.OTHER,
     val counterparty: String,
     val category: Category,
     val balanceAfter: Double?,
@@ -25,6 +26,13 @@ data class Transaction(
 )
 
 enum class Direction { IN, OUT }
+
+/**
+ * The M-PESA product behind a transaction, independent of [TransactionType]. Drives the fee
+ * breakdown (sending vs withdrawing vs paying cost very different amounts).
+ * PAYBILL = "sent to X for account Y"; BUY_GOODS = till ("paid to X").
+ */
+enum class TransactionKind { SEND_MONEY, PAYBILL, BUY_GOODS, WITHDRAWAL, AIRTIME, RECEIVED, OTHER }
 
 /**
  * A TRANSFER is money moving between the user's own accounts/wallets — it must never be

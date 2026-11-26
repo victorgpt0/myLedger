@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.Flow
  * repository maps these entities to domain models before they leave this layer.
  *
  * Income/expense aggregations exclude TRANSFER so self-wallet movements are not double-counted.
+ * Date grouping uses `'localtime'` so buckets follow the device's day/month, not UTC
+ * (otherwise 00:00–02:59 EAT lands on the previous day).
  */
 @Dao
 interface TransactionDao {
@@ -18,17 +20,17 @@ interface TransactionDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(entity: TransactionEntity): Long
 
-    @Query("SELECT * FROM transactions ORDER BY timestamp DESC")
+    @Query("SELECT * FROM transactions ORDER BY timestamp DESC, rowid DESC")
     fun observeAll(): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM transactions ORDER BY timestamp DESC LIMIT :limit")
+    @Query("SELECT * FROM transactions ORDER BY timestamp DESC, rowid DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<TransactionEntity>>
 
     @Query(
         """
         SELECT * FROM transactions
         WHERE timestamp >= :startMillis AND timestamp < :endMillis
-        ORDER BY timestamp DESC
+        ORDER BY timestamp DESC, rowid DESC
         """
     )
     fun observeInRange(startMillis: Long, endMillis: Long): Flow<List<TransactionEntity>>
@@ -46,15 +48,20 @@ interface TransactionDao {
     )
     fun observeCategoryTotalsInRange(startMillis: Long, endMillis: Long): Flow<List<CategoryTotalRow>>
 
+    /**
+     * All balance-bearing rows at the newest timestamp. Several can tie (minute-precision SMS
+     * times); the repository resolves the true latest via the balance chain. Ordered by rowid
+     * DESC so the fallback is the most recently inserted row.
+     */
     @Query(
         """
-        SELECT balanceAfter FROM transactions
+        SELECT * FROM transactions
         WHERE balanceAfter IS NOT NULL
-        ORDER BY timestamp DESC
-        LIMIT 1
+          AND timestamp = (SELECT MAX(timestamp) FROM transactions WHERE balanceAfter IS NOT NULL)
+        ORDER BY rowid DESC
         """
     )
-    fun observeLatestBalance(): Flow<Double?>
+    fun observeLatestBalanceCandidates(): Flow<List<TransactionEntity>>
 
     @Query(
         """
@@ -78,16 +85,6 @@ interface TransactionDao {
 
     @Query(
         """
-        SELECT COALESCE(SUM(amount), 0) FROM transactions
-        WHERE type = 'TRANSFER'
-          AND timestamp >= :startMillis
-          AND timestamp < :endMillis
-        """
-    )
-    fun observeTransferTotalInRange(startMillis: Long, endMillis: Long): Flow<Double>
-
-    @Query(
-        """
         SELECT COALESCE(SUM(feeAmount), 0) FROM transactions
         WHERE feeAmount IS NOT NULL
           AND timestamp >= :startMillis
@@ -96,20 +93,50 @@ interface TransactionDao {
     )
     fun observeTotalFeesInRange(startMillis: Long, endMillis: Long): Flow<Double>
 
+    /**
+     * Headline totals for one period in a single pass. Transfers are split by direction so
+     * wallet deposits and withdrawals don't add up to a misleading combined figure.
+     */
     @Query(
         """
-        SELECT COALESCE(SUM(amount), 0) FROM transactions
-        WHERE type IN ('INCOME', 'EXPENSE')
-          AND timestamp >= :startMillis
+        SELECT
+          COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amount END), 0) AS income,
+          COALESCE(SUM(CASE WHEN type = 'EXPENSE' THEN amount END), 0) AS expense,
+          COALESCE(SUM(feeAmount), 0) AS fees,
+          COALESCE(SUM(CASE WHEN type = 'TRANSFER' AND direction = 'OUT' THEN amount END), 0) AS transferOut,
+          COALESCE(SUM(CASE WHEN type = 'TRANSFER' AND direction = 'IN' THEN amount END), 0) AS transferIn,
+          COUNT(CASE WHEN type = 'EXPENSE' THEN 1 END) AS expenseCount
+        FROM transactions
+        WHERE timestamp >= :startMillis
           AND timestamp < :endMillis
         """
     )
-    fun observeMoneyMovedInRange(startMillis: Long, endMillis: Long): Flow<Double>
+    fun observePeriodTotals(startMillis: Long, endMillis: Long): Flow<PeriodTotalsRow>
+
+    /** Fees grouped by transaction kind; kinds that cost nothing are omitted. */
+    @Query(
+        """
+        SELECT kind,
+               COALESCE(SUM(feeAmount), 0) AS fees,
+               COUNT(*) AS transactionCount
+        FROM transactions
+        WHERE timestamp >= :startMillis
+          AND timestamp < :endMillis
+        GROUP BY kind
+        HAVING fees > 0
+        ORDER BY fees DESC
+        """
+    )
+    fun observeFeesByKind(startMillis: Long, endMillis: Long): Flow<List<FeeByKindRow>>
+
+    /** Earliest stored transaction — bounds "All time" and per-day averages to real data. */
+    @Query("SELECT MIN(timestamp) FROM transactions")
+    fun observeFirstTimestamp(): Flow<Long?>
 
     @Query(
         """
         SELECT
-          strftime('%Y-%m', timestamp / 1000, 'unixepoch') AS yearMonth,
+          strftime('%Y-%m', timestamp / 1000, 'unixepoch', 'localtime') AS yearMonth,
           SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) AS income,
           SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) AS expense,
           SUM(COALESCE(feeAmount, 0)) AS fees
@@ -126,7 +153,7 @@ interface TransactionDao {
     @Query(
         """
         SELECT
-          CAST(strftime('%w', timestamp / 1000, 'unixepoch') AS INTEGER) AS dayOfWeek,
+          CAST(strftime('%w', timestamp / 1000, 'unixepoch', 'localtime') AS INTEGER) AS dayOfWeek,
           SUM(amount) AS total
         FROM transactions
         WHERE type = 'EXPENSE'

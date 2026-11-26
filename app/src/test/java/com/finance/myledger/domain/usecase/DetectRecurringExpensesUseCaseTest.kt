@@ -6,7 +6,9 @@ import com.finance.myledger.domain.model.CounterpartySpend
 import com.finance.myledger.domain.model.DateRangeBounds
 import com.finance.myledger.domain.model.DayOfWeekSpend
 import com.finance.myledger.domain.model.Direction
+import com.finance.myledger.domain.model.FeeByKind
 import com.finance.myledger.domain.model.MonthlyTotal
+import com.finance.myledger.domain.model.PeriodTotals
 import com.finance.myledger.domain.model.Transaction
 import com.finance.myledger.domain.model.TransactionType
 import com.finance.myledger.domain.repository.TransactionRepository
@@ -82,11 +84,12 @@ class DetectRecurringExpensesUseCaseTest {
         override fun observeLatestBalance() = emptyFlow<Double?>()
         override fun observeExpenseTotalInRange(bounds: DateRangeBounds) = emptyFlow<Double>()
         override fun observeIncomeTotalInRange(bounds: DateRangeBounds) = emptyFlow<Double>()
-        override fun observeTransferTotalInRange(bounds: DateRangeBounds) = emptyFlow<Double>()
         override fun observeCategoryTotalsInRange(bounds: DateRangeBounds) =
             emptyFlow<List<CategorySpend>>()
         override fun observeTotalFeesInRange(bounds: DateRangeBounds) = emptyFlow<Double>()
-        override fun observeMoneyMovedInRange(bounds: DateRangeBounds) = emptyFlow<Double>()
+        override fun observePeriodTotals(bounds: DateRangeBounds) = emptyFlow<PeriodTotals>()
+        override fun observeFeesByKind(bounds: DateRangeBounds) = emptyFlow<List<FeeByKind>>()
+        override fun observeFirstTimestamp() = emptyFlow<Long?>()
         override fun observeMonthlyTrend(bounds: DateRangeBounds) = emptyFlow<List<MonthlyTotal>>()
         override fun observeDayOfWeekSpend(bounds: DateRangeBounds) =
             emptyFlow<List<DayOfWeekSpend>>()

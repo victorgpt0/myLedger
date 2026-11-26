@@ -28,7 +28,7 @@ fun RecurringExpensesCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Likely recurring", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Heuristic — same counterparty in 3+ of last 4 months, ±10% amount",
+                "Same payee in 3+ of the last 4 months at a similar amount (±10%). Always uses the last 4 months, whatever range is selected.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

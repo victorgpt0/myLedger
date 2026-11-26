@@ -2,6 +2,7 @@ package com.finance.myledger.data.parser
 
 import com.finance.myledger.domain.model.Category
 import com.finance.myledger.domain.model.Direction
+import com.finance.myledger.domain.model.TransactionKind
 import com.finance.myledger.domain.model.TransactionType
 import com.google.common.truth.Truth.assertThat
 import org.junit.Before
@@ -146,5 +147,41 @@ class MpesaParserTest {
     fun parse_unmatched_returnsNull() {
         val body = "Your OTP is 123456. Do not share."
         assertThat(parser.parse("MPESA", body, smsTimestamp)).isNull()
+    }
+
+    @Test
+    fun parse_sameMinuteMessages_allUseBodyTimestamp() {
+        // Regression: "paid to MERCHANT. on <date>" used to drop the body date and fall back to
+        // the SMS delivery time, making it sort after same-minute siblings (wrong latest balance).
+        val paid = "UKQA13VVJN Confirmed. Ksh535.00 paid to YAJJA DELIVERY ENTERPRISE. on 26/11/26 at 12:27 PM." +
+            "New M-PESA balance is Ksh2,487.20. Transaction cost, Ksh0.00. Amount you can transact within the day is 499,395.00."
+        val received = "UKQFE3YGCJ Confirmed.You have received Ksh360.00 from Evans  Maingi 0759***207 on 26/11/26 at 12:27 PM  " +
+            "New M-PESA balance is Ksh2,847.20. Invest & earn daily interest with ZIIDI on https://saf.cx/cF6ir"
+        val sent = "UKQA13VPWQ Confirmed. Ksh10.00 sent to ZIIDI on 26/11/26 at 12:27 PM New M-PESA balance is Ksh2,837.20. " +
+            "Transaction cost, Ksh0.00.Amount you can transact within the day is 499,385.00."
+
+        val txs = listOf(paid, received, sent).map { parser.parse("MPESA", it, smsTimestamp)!! }
+
+        assertThat(txs.map { it.timestamp }.toSet()).hasSize(1)
+        assertThat(txs[0].timestamp).isNotEqualTo(smsTimestamp)
+        assertThat(txs[0].counterparty).isEqualTo("YAJJA DELIVERY ENTERPRISE")
+        assertThat(txs.map { it.balanceAfter }).containsExactly(2487.2, 2847.2, 2837.2).inOrder()
+    }
+
+    @Test
+    fun parse_setsKindPerMessageShape() {
+        fun kindOf(body: String) = parser.parse("MPESA", body, smsTimestamp)!!.kind
+        assertThat(kindOf("TDJ45H7X3R Confirmed. Ksh500.00 sent to JOHN DOE 0712345678 on 1/7/26 at 3:15 PM. New M-PESA balance is Ksh1,200.00."))
+            .isEqualTo(TransactionKind.SEND_MONEY)
+        assertThat(kindOf("TDJ45H7X3S Confirmed. Ksh450.00 sent to KPLC PREPAID for account 1234 on 1/7/26 at 10:00 AM. New M-PESA balance is Ksh750.00. Transaction cost, Ksh5.00."))
+            .isEqualTo(TransactionKind.PAYBILL)
+        assertThat(kindOf("XYZ98AB76C Confirmed. Ksh450.00 paid to KPLC PREPAID. on 1/7/26 at 10:00 AM. New M-PESA balance is Ksh750.00."))
+            .isEqualTo(TransactionKind.BUY_GOODS)
+        assertThat(kindOf("ABC12DE34F Confirmed. You have received Ksh1,000.00 from JANE DOE 0722334455 on 1/7/26 at 2:00 PM. New M-PESA balance is Ksh2,200.00."))
+            .isEqualTo(TransactionKind.RECEIVED)
+        assertThat(kindOf("QWE11RTY22 Confirmed. Ksh2,000.00 withdrawn from Agent AMOS SHOP on 1/7/26 at 4:30 PM. New M-PESA balance is Ksh500.00. Transaction cost, Ksh28.00."))
+            .isEqualTo(TransactionKind.WITHDRAWAL)
+        assertThat(kindOf("AIR55TIME6 Confirmed. You bought Ksh100.00 of airtime on 1/7/26 at 9:00 AM. New M-PESA balance is Ksh400.00."))
+            .isEqualTo(TransactionKind.AIRTIME)
     }
 }

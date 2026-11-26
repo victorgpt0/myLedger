@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.content.Context
 import androidx.room.Room
 import com.finance.myledger.data.local.AppDatabase
+import com.finance.myledger.data.local.Migrations
 import com.finance.myledger.data.local.TransactionDao
 import dagger.Module
 import dagger.Provides
@@ -23,6 +24,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "myledger.db")
+            .addMigrations(Migrations.MIGRATION_2_3)
             .fallbackToDestructiveMigration()
             .build()
 

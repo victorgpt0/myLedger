@@ -4,7 +4,9 @@ import com.finance.myledger.domain.model.CategorySpend
 import com.finance.myledger.domain.model.CounterpartySpend
 import com.finance.myledger.domain.model.DateRangeBounds
 import com.finance.myledger.domain.model.DayOfWeekSpend
+import com.finance.myledger.domain.model.FeeByKind
 import com.finance.myledger.domain.model.MonthlyTotal
+import com.finance.myledger.domain.model.PeriodTotals
 import com.finance.myledger.domain.model.Transaction
 import kotlinx.coroutines.flow.Flow
 
@@ -28,13 +30,15 @@ interface TransactionRepository {
 
     fun observeIncomeTotalInRange(bounds: DateRangeBounds): Flow<Double>
 
-    fun observeTransferTotalInRange(bounds: DateRangeBounds): Flow<Double>
-
     fun observeCategoryTotalsInRange(bounds: DateRangeBounds): Flow<List<CategorySpend>>
 
     fun observeTotalFeesInRange(bounds: DateRangeBounds): Flow<Double>
 
-    fun observeMoneyMovedInRange(bounds: DateRangeBounds): Flow<Double>
+    fun observePeriodTotals(bounds: DateRangeBounds): Flow<PeriodTotals>
+
+    fun observeFeesByKind(bounds: DateRangeBounds): Flow<List<FeeByKind>>
+
+    fun observeFirstTimestamp(): Flow<Long?>
 
     fun observeMonthlyTrend(bounds: DateRangeBounds): Flow<List<MonthlyTotal>>
 

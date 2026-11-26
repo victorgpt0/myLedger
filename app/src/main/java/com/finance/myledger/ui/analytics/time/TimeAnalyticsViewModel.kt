@@ -30,16 +30,7 @@ class TimeAnalyticsViewModel @Inject constructor(
             selectedRange
                 .flatMapLatest { range ->
                     observeTimeAnalytics(range).map { analytics ->
-                        TimeAnalyticsUiState.Success(
-                            selectedRange = range,
-                            monthlyTrend = analytics.monthlyTrend,
-                            dayOfWeekSpend = analytics.dayOfWeekSpend,
-                            totalFees = analytics.totalFees,
-                            feesPercentOfMoved = analytics.feesAsPercentOfMoved,
-                            transferTotal = analytics.transferTotal,
-                            expenseTotal = analytics.expenseTotal,
-                            incomeTotal = analytics.incomeTotal
-                        )
+                        TimeAnalyticsUiState.Success(selectedRange = range, analytics = analytics)
                     }
                 }
                 .collect { _uiState.value = it }

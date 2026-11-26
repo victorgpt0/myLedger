@@ -7,7 +7,10 @@ import com.finance.myledger.data.local.AppDatabase
 import com.finance.myledger.domain.model.Category
 import com.finance.myledger.domain.model.DateRangeBounds
 import com.finance.myledger.domain.model.Direction
+import com.finance.myledger.domain.model.FeeByKind
+import com.finance.myledger.domain.model.PeriodTotals
 import com.finance.myledger.domain.model.Transaction
+import com.finance.myledger.domain.model.TransactionKind
 import com.finance.myledger.domain.model.TransactionType
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
@@ -105,6 +108,76 @@ class TransactionRepositoryImplTest {
         assertThat(fees).isEqualTo(20.0)
     }
 
+    @Test
+    fun observeLatestBalance_sameTimestamp_followsBalanceChain() = runTest {
+        // 2487.20 -> +360 -> 2847.20 -> -10 -> 2837.20, all in the same minute, inserted out of order.
+        repository.insert(sampleTx(id = "UKQA13VPWQ", amount = 10.0, balance = 2837.2, fee = 0.0))
+        repository.insert(sampleTx(id = "UKQFE3YGCJ", amount = 360.0, balance = 2847.2, type = TransactionType.INCOME))
+        repository.insert(sampleTx(id = "UKQA13VVJN", amount = 535.0, balance = 2487.2, fee = 0.0))
+
+        assertThat(repository.observeLatestBalance().first()).isEqualTo(2837.2)
+    }
+
+    @Test
+    fun observeAll_sameTimestamp_ordersByBalanceChain() = runTest {
+        repository.insert(sampleTx(id = "UKQA13VPWQ", amount = 10.0, balance = 2837.2, fee = 0.0))
+        repository.insert(sampleTx(id = "UKQFE3YGCJ", amount = 360.0, balance = 2847.2, type = TransactionType.INCOME))
+        repository.insert(sampleTx(id = "UKQA13VVJN", amount = 535.0, balance = 2487.2, fee = 0.0))
+
+        val ids = repository.observeAll().first().map { it.id }
+        assertThat(ids).containsExactly("UKQA13VPWQ", "UKQFE3YGCJ", "UKQA13VVJN").inOrder()
+    }
+
+    @Test
+    fun observePeriodTotals_splitsTransfersByDirection() = runTest {
+        val bounds = DateRangeBounds(0L, Long.MAX_VALUE)
+        repository.insert(sampleTx(id = "INC0000001", amount = 1_000.0, type = TransactionType.INCOME))
+        repository.insert(sampleTx(id = "EXP0000001", amount = 300.0, fee = 7.0))
+        repository.insert(sampleTx(id = "EXP0000002", amount = 200.0))
+        repository.insert(sampleTx(id = "TRO0000001", amount = 500.0, type = TransactionType.TRANSFER, direction = Direction.OUT))
+        repository.insert(sampleTx(id = "TRI0000001", amount = 200.0, type = TransactionType.TRANSFER, direction = Direction.IN))
+
+        val totals = repository.observePeriodTotals(bounds).first()
+
+        assertThat(totals.income).isEqualTo(1_000.0)
+        assertThat(totals.expense).isEqualTo(500.0)
+        assertThat(totals.fees).isEqualTo(7.0)
+        assertThat(totals.transferOut).isEqualTo(500.0)
+        assertThat(totals.transferIn).isEqualTo(200.0)
+        assertThat(totals.netToWallets).isEqualTo(300.0)
+        assertThat(totals.expenseCount).isEqualTo(2)
+    }
+
+    @Test
+    fun observePeriodTotals_emptyRangeIsZero() = runTest {
+        val totals = repository.observePeriodTotals(DateRangeBounds(0L, 1L)).first()
+        assertThat(totals).isEqualTo(PeriodTotals.EMPTY)
+    }
+
+    @Test
+    fun observeFeesByKind_groupsAndSkipsFreeKinds() = runTest {
+        val bounds = DateRangeBounds(0L, Long.MAX_VALUE)
+        repository.insert(sampleTx(id = "WD00000001", amount = 1_000.0, fee = 29.0, kind = TransactionKind.WITHDRAWAL))
+        repository.insert(sampleTx(id = "WD00000002", amount = 2_000.0, fee = 29.0, kind = TransactionKind.WITHDRAWAL))
+        repository.insert(sampleTx(id = "SM00000001", amount = 500.0, fee = 7.0, kind = TransactionKind.SEND_MONEY))
+        repository.insert(sampleTx(id = "BG00000001", amount = 50.0, fee = 0.0, kind = TransactionKind.BUY_GOODS))
+
+        val fees = repository.observeFeesByKind(bounds).first()
+
+        assertThat(fees).containsExactly(
+            FeeByKind(TransactionKind.WITHDRAWAL, 58.0, 2),
+            FeeByKind(TransactionKind.SEND_MONEY, 7.0, 1)
+        ).inOrder()
+    }
+
+    @Test
+    fun observeFirstTimestamp_returnsEarliestOrNull() = runTest {
+        assertThat(repository.observeFirstTimestamp().first()).isNull()
+        repository.insert(sampleTx(id = "LATE000001", amount = 1.0, timestamp = 5_000L))
+        repository.insert(sampleTx(id = "EARLY00001", amount = 1.0, timestamp = 2_000L))
+        assertThat(repository.observeFirstTimestamp().first()).isEqualTo(2_000L)
+    }
+
     private fun sampleTx(
         id: String,
         amount: Double,
@@ -112,13 +185,16 @@ class TransactionRepositoryImplTest {
         balance: Double? = 1_000.0,
         timestamp: Long = 1_720_000_000_000L,
         type: TransactionType = TransactionType.EXPENSE,
-        fee: Double? = null
+        fee: Double? = null,
+        direction: Direction = if (type == TransactionType.INCOME) Direction.IN else Direction.OUT,
+        kind: TransactionKind = TransactionKind.OTHER
     ) = Transaction(
         id = id,
         source = "MPESA",
         amount = amount,
-        direction = if (type == TransactionType.INCOME) Direction.IN else Direction.OUT,
+        direction = direction,
         type = type,
+        kind = kind,
         counterparty = counterparty,
         category = Category.OTHER,
         balanceAfter = balance,

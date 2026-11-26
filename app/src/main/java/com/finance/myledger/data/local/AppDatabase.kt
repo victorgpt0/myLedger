@@ -6,12 +6,13 @@ import androidx.room.TypeConverters
 
 /**
  * App Room database — the single source of truth for persisted transactions.
- * Version bumped when feeAmount / TransactionType columns were added; destructive
- * fallback is fine for v1 (re-scan SMS after upgrade).
+ *
+ * v2 → v3 adds `kind` via [Migrations.MIGRATION_2_3] (data preserved). Older versions still
+ * use destructive fallback (re-scan SMS after upgrade).
  */
 @Database(
     entities = [TransactionEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

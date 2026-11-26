@@ -3,6 +3,7 @@ package com.finance.myledger.data.parser
 import com.finance.myledger.domain.classifier.CategoryClassifier
 import com.finance.myledger.domain.model.Direction
 import com.finance.myledger.domain.model.Transaction
+import com.finance.myledger.domain.model.TransactionKind
 import com.finance.myledger.domain.model.TransactionType
 import com.finance.myledger.domain.sms.SmsParser
 import java.text.SimpleDateFormat
@@ -44,6 +45,7 @@ class MpesaParser @Inject constructor() : SmsParser {
         val code: String,
         val amount: Double,
         val direction: Direction,
+        val kind: TransactionKind,
         val counterparty: String,
         val balanceAfter: Double?,
         val bodyTimestamp: Long?
@@ -62,6 +64,7 @@ class MpesaParser @Inject constructor() : SmsParser {
                         code = m.group(1),
                         amount = parseAmount(m.group(2)),
                         direction = Direction.OUT,
+                        kind = if (FOR_ACCOUNT.matcher(body).find()) TransactionKind.PAYBILL else TransactionKind.SEND_MONEY,
                         counterparty = m.group(3).trim(),
                         balanceAfter = parseAmount(m.group(5)),
                         bodyTimestamp = parseMpesaDate(m.group(4), body, smsTs)
@@ -82,6 +85,7 @@ class MpesaParser @Inject constructor() : SmsParser {
                         code = m.group(1),
                         amount = parseAmount(m.group(2)),
                         direction = Direction.IN,
+                        kind = TransactionKind.RECEIVED,
                         counterparty = m.group(3).trim(),
                         balanceAfter = parseAmount(m.group(5)),
                         bodyTimestamp = parseMpesaDate(m.group(4), body, smsTs)
@@ -93,8 +97,11 @@ class MpesaParser @Inject constructor() : SmsParser {
 
             // Paybill / till payment (fee often present):
             // "XYZ98AB76C Confirmed. Ksh450.00 paid to KPLC PREPAID. on 1/7/26 at 10:00 AM. New M-PESA balance is Ksh750.00. Transaction cost, Ksh15.00."
+            // The merchant name is usually followed by "." before " on <date>" — the optional `\.?`
+            // keeps the body date in that case. Without it the date was dropped and the SMS delivery
+            // time (with seconds) was used, making this row sort after same-minute siblings.
             Pattern.compile(
-                """(?i)([A-Z0-9]{10})\s+Confirmed\.\s*Ksh([\d,]+\.?\d*)\s+paid to\s+(.+?)(?:\s+on\s+(\d{1,2}/\d{1,2}/\d{2,4})|\.).*?New M-PESA balance is Ksh([\d,]+\.?\d*)""",
+                """(?i)([A-Z0-9]{10})\s+Confirmed\.\s*Ksh([\d,]+\.?\d*)\s+paid to\s+(.+?)(?:\.?\s+on\s+(\d{1,2}/\d{1,2}/\d{2,4})|\.).*?New M-PESA balance is Ksh([\d,]+\.?\d*)""",
                 Pattern.DOTALL
             ) to { m, body, smsTs ->
                 toTransaction(
@@ -102,6 +109,7 @@ class MpesaParser @Inject constructor() : SmsParser {
                         code = m.group(1),
                         amount = parseAmount(m.group(2)),
                         direction = Direction.OUT,
+                        kind = TransactionKind.BUY_GOODS,
                         counterparty = m.group(3).trim().trimEnd('.'),
                         balanceAfter = parseAmount(m.group(5)),
                         bodyTimestamp = m.group(4)?.let { parseMpesaDate(it, body, smsTs) }
@@ -122,6 +130,7 @@ class MpesaParser @Inject constructor() : SmsParser {
                         code = m.group(1),
                         amount = parseAmount(m.group(2)),
                         direction = Direction.OUT,
+                        kind = TransactionKind.WITHDRAWAL,
                         counterparty = m.group(3).trim(),
                         balanceAfter = parseAmount(m.group(5)),
                         bodyTimestamp = parseMpesaDate(m.group(4), body, smsTs)
@@ -142,6 +151,7 @@ class MpesaParser @Inject constructor() : SmsParser {
                         code = m.group(1),
                         amount = parseAmount(m.group(2)),
                         direction = Direction.OUT,
+                        kind = TransactionKind.AIRTIME,
                         counterparty = "Airtime",
                         balanceAfter = parseAmount(m.group(4)),
                         bodyTimestamp = parseMpesaDate(m.group(3), body, smsTs)
@@ -169,6 +179,7 @@ class MpesaParser @Inject constructor() : SmsParser {
             amount = extracted.amount,
             direction = extracted.direction,
             type = type,
+            kind = extracted.kind,
             counterparty = counterparty,
             category = CategoryClassifier.classify(counterparty, body),
             balanceAfter = extracted.balanceAfter,
@@ -209,6 +220,9 @@ class MpesaParser @Inject constructor() : SmsParser {
     companion object {
         private val FEE_PATTERN: Pattern =
             Pattern.compile("""(?i)Transaction cost,?\s*Ksh\s*([\d,]+\.?\d*)""")
+
+        // Paybill confirmations read "sent to KPLC PREPAID for account 123…"; plain sends don't.
+        private val FOR_ACCOUNT: Pattern = Pattern.compile("""(?i)sent to\s+.+?\s+for account""")
 
         private val TIME_PATTERN: Pattern =
             Pattern.compile("""(?i)at\s+(\d{1,2}:\d{2}\s*[AP]M)""")

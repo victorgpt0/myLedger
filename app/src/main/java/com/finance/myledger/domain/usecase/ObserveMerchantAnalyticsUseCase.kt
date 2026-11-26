@@ -25,7 +25,9 @@ class ObserveMerchantAnalyticsUseCase @Inject constructor(
         val bounds = range.toBounds()
         return combine(
             repository.observeTopCounterparties(bounds, topLimit),
-            detectRecurring(range)
+            // Recurring needs months of history, so it always uses its own look-back window
+            // rather than the selected range (which could be a single month).
+            detectRecurring()
         ) { top, recurring ->
             MerchantAnalytics(topMerchants = top, recurring = recurring)
         }
