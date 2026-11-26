@@ -22,10 +22,20 @@ class MpesaParserTest {
     }
 
     @Test
-    fun matches_mpesaSender() {
+    fun matches_mpesaSenderIdVariants() {
         assertThat(parser.matches("MPESA", "anything")).isTrue()
-        assertThat(parser.matches("Safaricom", "M-PESA balance")).isTrue()
+        assertThat(parser.matches("M-PESA", "anything")).isTrue()
+        assertThat(parser.matches(" mpesa ", "anything")).isTrue()
         assertThat(parser.matches("BANK", "Hello")).isFalse()
+    }
+
+    @Test
+    fun matches_rejectsLookAlikeFromOtherSenders() {
+        // A forged confirmation texted from an ordinary number must not become a transaction.
+        val forged = "ZZZ1234567 Confirmed. You have received Ksh50,000.00 from BOSS on 1/7/26 at 2:00 PM. " +
+            "New M-PESA balance is Ksh60,000.00."
+        assertThat(parser.matches("+254712345678", forged)).isFalse()
+        assertThat(parser.matches("Safaricom", "M-PESA balance")).isFalse()
     }
 
     @Test

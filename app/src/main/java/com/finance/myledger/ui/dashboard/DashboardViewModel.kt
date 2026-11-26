@@ -7,6 +7,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.finance.myledger.data.sms.SmsBackfillWorker
+import com.finance.myledger.domain.settings.PrivacySettings
 import com.finance.myledger.domain.sms.SmsPermissionChecker
 import com.finance.myledger.domain.usecase.ObserveDashboardSummaryUseCase
 import com.finance.myledger.domain.usecase.SyncTransactionsUseCase
@@ -28,7 +29,8 @@ class DashboardViewModel @Inject constructor(
     private val observeDashboardSummary: ObserveDashboardSummaryUseCase,
     private val syncTransactions: SyncTransactionsUseCase,
     private val permissionChecker: SmsPermissionChecker,
-    private val workManager: WorkManager
+    private val workManager: WorkManager,
+    private val privacySettings: PrivacySettings
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DashboardUiState>(DashboardUiState.Loading)
@@ -36,6 +38,14 @@ class DashboardViewModel @Inject constructor(
 
     private val isSyncing = MutableStateFlow(false)
     private var observeJob: Job? = null
+
+    /**
+     * Full import is started automatically, once per process, whenever SMS access is granted and
+     * the ledger is empty: on first run, and after a database reset (e.g. a destructive
+     * migration), where the incremental sync cursor would otherwise skip all older messages.
+     * Once-per-process prevents a loop when the inbox genuinely has no M-PESA messages.
+     */
+    private var autoImportRequested = false
 
     init {
         refreshPermissionAndObserve()
@@ -45,6 +55,14 @@ class DashboardViewModel @Inject constructor(
         refreshPermissionAndObserve()
     }
 
+    /** Re-check on resume — the user may have granted or revoked SMS access in system settings. */
+    fun onResume() {
+        val showingPermissionScreen = _uiState.value == DashboardUiState.PermissionRequired
+        if (showingPermissionScreen == permissionChecker.hasSmsPermissions()) {
+            refreshPermissionAndObserve()
+        }
+    }
+
     fun startBackfill() {
         val request = OneTimeWorkRequestBuilder<SmsBackfillWorker>().build()
         workManager.enqueueUniqueWork(
@@ -52,6 +70,11 @@ class DashboardViewModel @Inject constructor(
             ExistingWorkPolicy.KEEP,
             request
         )
+    }
+
+    fun toggleBalanceHidden() {
+        val current = (_uiState.value as? DashboardUiState.Success)?.balanceHidden ?: return
+        viewModelScope.launch { privacySettings.setHideBalance(!current) }
     }
 
     /** Incremental sync for pull-to-refresh — O(new messages), not a full inbox rescan. */
@@ -77,8 +100,9 @@ class DashboardViewModel @Inject constructor(
             combine(
                 observeDashboardSummary(),
                 workManager.getWorkInfosForUniqueWorkFlow(SmsBackfillWorker.WORK_NAME),
-                isSyncing
-            ) { summary, workInfos, syncing ->
+                isSyncing,
+                privacySettings.hideBalance
+            ) { summary, workInfos, syncing, balanceHidden ->
                 val runningInfo = workInfos.firstOrNull {
                     it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
                 }
@@ -92,6 +116,11 @@ class DashboardViewModel @Inject constructor(
                     summary.latestBalance == null &&
                     summary.monthlySpendTotal == 0.0
 
+                if (isEmpty && !isBackfilling && !autoImportRequested) {
+                    autoImportRequested = true
+                    startBackfill()
+                }
+
                 when {
                     isEmpty && !isBackfilling -> DashboardUiState.Empty
                     else -> DashboardUiState.Success(
@@ -102,7 +131,8 @@ class DashboardViewModel @Inject constructor(
                         feesPaidThisMonth = summary.feesPaidThisMonth,
                         isBackfilling = isBackfilling,
                         backfillProgress = progress,
-                        isSyncing = syncing
+                        isSyncing = syncing,
+                        balanceHidden = balanceHidden
                     )
                 }
             }.collect { state ->

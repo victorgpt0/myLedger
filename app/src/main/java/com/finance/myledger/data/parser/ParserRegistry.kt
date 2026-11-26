@@ -2,6 +2,7 @@ package com.finance.myledger.data.parser
 
 import com.finance.myledger.domain.model.Transaction
 import com.finance.myledger.domain.sms.SmsParser
+import com.finance.myledger.domain.sms.normalizeSender
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -14,6 +15,13 @@ import javax.inject.Singleton
 class ParserRegistry @Inject constructor(
     private val parsers: Set<@JvmSuppressWildcards SmsParser>
 ) {
+    /** Every sender ID any parser accepts, as written in the inbox — drives the inbox query filter. */
+    val senderIds: Set<String> = parsers.flatMap { it.senderIds }.toSet()
+
+    private val normalizedSenders = senderIds.map(::normalizeSender).toSet()
+
+    fun isKnownSender(sender: String): Boolean = normalizeSender(sender) in normalizedSenders
+
     fun parse(sender: String, body: String, timestamp: Long): Transaction? {
         val parser = parsers.firstOrNull { it.matches(sender, body) } ?: return null
         return parser.parse(sender, body, timestamp)

@@ -1,11 +1,13 @@
 package com.finance.myledger.di
 
+import com.finance.myledger.data.local.PrivacyPreferences
 import com.finance.myledger.data.local.SyncPreferences
 import com.finance.myledger.data.parser.MpesaParser
 import com.finance.myledger.data.repository.TransactionRepositoryImpl
 import com.finance.myledger.data.sms.AndroidSmsPermissionChecker
 import com.finance.myledger.data.sms.SmsContentReader
 import com.finance.myledger.domain.repository.TransactionRepository
+import com.finance.myledger.domain.settings.PrivacySettings
 import com.finance.myledger.domain.sms.SmsInboxReader
 import com.finance.myledger.domain.sms.SmsParser
 import com.finance.myledger.domain.sms.SmsPermissionChecker
@@ -41,6 +43,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSyncCursorStore(impl: SyncPreferences): SyncCursorStore
+
+    @Binds
+    @Singleton
+    abstract fun bindPrivacySettings(impl: PrivacyPreferences): PrivacySettings
 
     @Binds
     @IntoSet

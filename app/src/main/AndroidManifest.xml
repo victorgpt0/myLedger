@@ -6,9 +6,15 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 
+    <!-- SMS permissions imply telephony; declare it optional so tablets/ChromeOS aren't filtered out
+         (the app simply has no messages to read there). -->
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
+
     <application
         android:name=".MyLedgerApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"

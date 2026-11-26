@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.finance.myledger.ui.dashboard.components.BalanceCard
 import com.finance.myledger.ui.dashboard.components.MonthlySpendChart
@@ -42,6 +44,7 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResume() }
 
     when (val state = uiState) {
         DashboardUiState.PermissionRequired -> {
@@ -76,7 +79,7 @@ fun DashboardScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Import past M-PESA SMS to populate your dashboard.",
+                        text = "No M-PESA messages were found on this phone. New ones are added automatically as they arrive.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -85,7 +88,7 @@ fun DashboardScreen(
                         onClick = { viewModel.startBackfill() },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Scan SMS inbox")
+                        Text("Scan again")
                     }
                 }
             }
@@ -108,7 +111,11 @@ fun DashboardScreen(
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        BalanceCard(balance = state.balance)
+                        BalanceCard(
+                            balance = state.balance,
+                            hidden = state.balanceHidden,
+                            onToggleHidden = viewModel::toggleBalanceHidden
+                        )
 
                         Text(
                             text = "Fees paid this month: ${formatKes(state.feesPaidThisMonth)}",

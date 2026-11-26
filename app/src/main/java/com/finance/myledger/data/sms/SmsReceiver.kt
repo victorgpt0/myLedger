@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import com.finance.myledger.data.parser.ParserRegistry
 import com.finance.myledger.domain.usecase.ParseAndStoreSmsUseCase
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +24,9 @@ class SmsReceiver : BroadcastReceiver() {
     @Inject
     lateinit var parseAndStoreSms: ParseAndStoreSmsUseCase
 
+    @Inject
+    lateinit var parserRegistry: ParserRegistry
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -39,7 +43,8 @@ class SmsReceiver : BroadcastReceiver() {
                     .forEach { (sender, parts) ->
                         val body = parts.joinToString(separator = "") { it.displayMessageBody.orEmpty() }
                         val timestamp = parts.maxOfOrNull { it.timestampMillis } ?: System.currentTimeMillis()
-                        if (sender.isNotBlank() && body.isNotBlank()) {
+                        // Personal messages are dropped here, before any processing.
+                        if (body.isNotBlank() && parserRegistry.isKnownSender(sender)) {
                             parseAndStoreSms(sender, body, timestamp)
                         }
                     }

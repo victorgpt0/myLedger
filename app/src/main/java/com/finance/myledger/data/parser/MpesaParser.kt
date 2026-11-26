@@ -6,6 +6,7 @@ import com.finance.myledger.domain.model.Transaction
 import com.finance.myledger.domain.model.TransactionKind
 import com.finance.myledger.domain.model.TransactionType
 import com.finance.myledger.domain.sms.SmsParser
+import com.finance.myledger.domain.sms.normalizeSender
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.regex.Pattern
@@ -26,10 +27,17 @@ class MpesaParser @Inject constructor() : SmsParser {
 
     override val sourceName: String = "MPESA"
 
-    override fun matches(sender: String, body: String): Boolean {
-        val s = sender.trim().uppercase(Locale.US)
-        return s == "MPESA" || s.contains("MPESA") || body.contains("M-PESA", ignoreCase = true)
-    }
+    override val senderIds: Set<String> = setOf("MPESA", "M-PESA")
+
+    private val normalizedSenders = senderIds.map(::normalizeSender).toSet()
+
+    /**
+     * Sender ID only. Safaricom sends from the alphanumeric ID "MPESA", which ordinary phones
+     * can't use — so a look-alike "Confirmed. Ksh…" text from a phone number is rejected even
+     * if its body mentions M-PESA.
+     */
+    override fun matches(sender: String, body: String): Boolean =
+        normalizeSender(sender) in normalizedSenders
 
     override fun parse(sender: String, body: String, timestamp: Long): Transaction? {
         for ((pattern, extractor) in patterns) {

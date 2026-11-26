@@ -21,6 +21,8 @@ sealed class DashboardUiState {
         val feesPaidThisMonth: Double = 0.0,
         val isBackfilling: Boolean = false,
         val backfillProgress: Float? = null,
-        val isSyncing: Boolean = false
+        val isSyncing: Boolean = false,
+        /** User chose to obscure the balance (persisted); the card shows a pixelated placeholder. */
+        val balanceHidden: Boolean = false
     ) : DashboardUiState()
 }

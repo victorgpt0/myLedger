@@ -18,7 +18,10 @@ coroutines = "1.10.2"
 robolectric = "4.14.1"
 truth = "1.4.4"
 
+playAppUpdate = "2.1.0"
+
 [libraries]
+play-app-update = { group = "com.google.android.play", name = "app-update", version.ref = "playAppUpdate" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
