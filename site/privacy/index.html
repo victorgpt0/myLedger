@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>myLedger Privacy Policy</title>
+  <meta name="description" content="How myLedger handles your SMS and transaction data: it reads only M-PESA messages and keeps everything on your device.">
+  <link rel="icon" href="../icon.png">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<main>
+  <!--
+    Single source of the app's privacy policy, served by GitHub Pages at
+    https://victorgpt0.github.io/myLedger/privacy/ (deployed by .github/workflows/pages.yml).
+    Keep it consistent with the in-app disclosure (ui/permission/SmsPermissionScreen.kt) and the
+    Play Data safety / Permissions Declaration answers (docs/release/PLAY_RELEASE.md).
+  -->
+  <header>
+    <img src="../icon.png" alt="">
+    <div>
+      <h1>Privacy Policy</h1>
+      <p class="meta">myLedger (Android, <code>com.waystar.myLedger</code>) · Effective 26 November 2026</p>
+    </div>
+  </header>
+
+  <div class="summary">
+    <p><strong>In short:</strong> myLedger reads only your M-PESA messages, keeps everything on your phone, and sends your data nowhere.</p>
+  </div>
+
+  <h2>Who we are</h2>
+  <p>myLedger is developed by
+    <a href="https://github.com/victorgpt0/myLedger">Victor Gichuru</a>
+    . You can contact us at
+    <a href="mailto:vgichuru129@gmail.com">THIS EMAIL</a>
+  </p>
+
+  <h2>What myLedger does</h2>
+  <p>myLedger builds a personal record of your M-PESA transactions (balance, payments, income and fees) so you can see how you spend. It does this by reading the confirmation SMS that M-PESA sends to your phone.</p>
+
+  <h2>What we access</h2>
+  <ul>
+    <li><strong>SMS messages from M-PESA only.</strong> With your permission (Android's <code>READ_SMS</code> and <code>RECEIVE_SMS</code>), the app reads messages from the M-PESA sender ID, both existing messages and new ones as they arrive. Messages from any other sender, including your personal conversations, are skipped and are never read into the app.</li>
+    <li>From each M-PESA message, the app stores the transaction details (reference code, amount, counterparty, balance, fee, date and time) and the message text, so it can show and recalculate your history.</li>
+  </ul>
+
+  <h2>Where your data goes</h2>
+  <ul>
+    <li><strong>Nowhere. All data stays on your device.</strong> myLedger has no servers and no accounts. It does not upload, share, sell or transfer your SMS or transaction data to anyone.</li>
+    <li>Your data is <strong>not</strong> included in Android cloud backup or device-to-device transfer. On a new phone, the app rebuilds your history from the M-PESA messages on that phone.</li>
+    <li>Your data is not used for advertising, profiling, credit scoring, or any purpose other than showing you your own spending.</li>
+  </ul>
+
+  <h2>App updates</h2>
+  <p>myLedger uses Google Play's in-app update service to check whether a newer version is available. That check is handled by Google Play under <a href="https://policies.google.com/privacy">Google's Privacy Policy</a> and involves no SMS or transaction data.</p>
+
+  <h2>Your choices</h2>
+  <ul>
+    <li>Turn off SMS access at any time in <em>Settings › Apps › myLedger › Permissions</em>. The app then stops reading messages.</li>
+    <li>Hide your balance on the home screen with the eye button. The setting is remembered on your device.</li>
+    <li>Uninstalling the app permanently deletes everything it stored.</li>
+  </ul>
+
+  <h2>Children</h2>
+  <p>myLedger is not directed at children under 13.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If this policy changes, we will update the effective date above and, if the change is significant, tell you in the app.</p>
+
+  <h2>Contact</h2>
+  <p>Questions or requests:
+    <a href="mailto:vgichuru129@gmail.com">EMAIL</a>
+    .</p>
+
+  <footer><a href="../">myLedger</a></footer>
+</main>
+</body>
+</html>
